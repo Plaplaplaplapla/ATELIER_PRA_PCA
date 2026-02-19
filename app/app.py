@@ -4,7 +4,6 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 
 DB_PATH = os.getenv("DB_PATH", "/data/app.db")
-BACKUP_DIR = os.getenv("BACKUP_DIR", "/backup")
 
 app = Flask(__name__)
 
@@ -25,39 +24,7 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-def get_last_backup_info():
-    if not os.path.isdir(BACKUP_DIR):
-        return None, None
 
-    files = []
-    for name in os.listdir(BACKUP_DIR):
-        path = os.path.join(BACKUP_DIR, name)
-        if os.path.isfile(path):
-            files.append((name, path))
-
-    if not files:
-        return None, None
-
-    # Tes backups sont du type app-<epoch>.db
-    pattern = re.compile(r"^app-(\d+)\.db$")
-
-    with_epoch = []
-    for name, path in files:
-        m = pattern.match(name)
-        if m:
-            with_epoch.append((int(m.group(1)), name))
-
-    now = datetime.now(timezone.utc).timestamp()
-
-    if with_epoch:
-        epoch, name = max(with_epoch, key=lambda t: t[0])
-        age = int(max(0, now - epoch))
-        return name, age
-
-    # fallback : tri par date de modif si le naming change
-    latest_name, latest_path = max(files, key=lambda t: os.path.getmtime(t[1]))
-    age = int(max(0, now - os.path.getmtime(latest_path)))
-    return latest_name, age
 # ---------- Routes ----------
 
 @app.get("/")
@@ -120,24 +87,45 @@ def count():
     conn.close()
 
     return jsonify(count=n)
-    
+
+# ---------- Nouvelle route demandée ----------
+
 @app.get("/status")
 def status():
     init_db()
 
+    # count en base
     conn = get_conn()
     cur = conn.execute("SELECT COUNT(*) FROM events")
-    n = cur.fetchone()[0]
+    count = cur.fetchone()[0]
     conn.close()
 
-    last_file, age = get_last_backup_info()
+    last_backup_file = None
+    backup_age_seconds = None
+    backup_dir = "/backup"
+
+    if os.path.isdir(backup_dir):
+        files = [
+            f for f in os.listdir(backup_dir)
+            if os.path.isfile(os.path.join(backup_dir, f))
+        ]
+
+        if files:
+            latest = max(
+                files,
+                key=lambda f: os.path.getmtime(os.path.join(backup_dir, f))
+            )
+            last_backup_file = latest
+            backup_age_seconds = int(
+                datetime.utcnow().timestamp()
+                - os.path.getmtime(os.path.join(backup_dir, latest))
+            )
 
     return jsonify(
-        count=n,
-        last_backup_file=last_file,
-        backup_age_seconds=age
+        count=count,
+        last_backup_file=last_backup_file,
+        backup_age_seconds=backup_age_seconds
     )
-
 
 # ---------- Main ----------
 if __name__ == "__main__":
