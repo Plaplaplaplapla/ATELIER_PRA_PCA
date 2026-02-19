@@ -4,6 +4,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 
 DB_PATH = os.getenv("DB_PATH", "/data/app.db")
+BACKUP_DIR = os.getenv("BACKUP_DIR", "/backup")
 
 app = Flask(__name__)
 
@@ -24,7 +25,39 @@ def init_db():
     """)
     conn.commit()
     conn.close()
+def get_last_backup_info():
+    if not os.path.isdir(BACKUP_DIR):
+        return None, None
 
+    files = []
+    for name in os.listdir(BACKUP_DIR):
+        path = os.path.join(BACKUP_DIR, name)
+        if os.path.isfile(path):
+            files.append((name, path))
+
+    if not files:
+        return None, None
+
+    # Tes backups sont du type app-<epoch>.db
+    pattern = re.compile(r"^app-(\d+)\.db$")
+
+    with_epoch = []
+    for name, path in files:
+        m = pattern.match(name)
+        if m:
+            with_epoch.append((int(m.group(1)), name))
+
+    now = datetime.now(timezone.utc).timestamp()
+
+    if with_epoch:
+        epoch, name = max(with_epoch, key=lambda t: t[0])
+        age = int(max(0, now - epoch))
+        return name, age
+
+    # fallback : tri par date de modif si le naming change
+    latest_name, latest_path = max(files, key=lambda t: os.path.getmtime(t[1]))
+    age = int(max(0, now - os.path.getmtime(latest_path)))
+    return latest_name, age
 # ---------- Routes ----------
 
 @app.get("/")
