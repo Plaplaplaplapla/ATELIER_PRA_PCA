@@ -24,7 +24,7 @@ spec:
               value: /backup
           ports:
             - containerPort: 8080
-          command: ["/bin/sh","-lc"]
+          command: ["/bin/sh", "-lc"]
           args:
             - |
               cd /opt/app && gunicorn -w 2 -b 0.0.0.0:8080 app:app
@@ -41,3 +41,4 @@ spec:
         - name: backup
           persistentVolumeClaim:
             claimName: pra-backup
+
