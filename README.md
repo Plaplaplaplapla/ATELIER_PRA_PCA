@@ -322,8 +322,6 @@ Difficulté : Moyenne (~2 heures)
 * backup_age_seconds : âge du dernier backup
 
 <img width="700" height="105" alt="image" src="https://github.com/user-attachments/assets/2da45125-ac22-410d-86f5-27b37325fb93" />
-<img width="700" height="105" alt="image" src="https://github.com/user-attachments/assets/2da45125-ac22-410d-86f5-27b37325fb93" />
-<img width="700" height="105" alt="image" src="https://github.com/user-attachments/assets/2da45125-ac22-410d-86f5-27b37325fb93" />
 
 
 *
@@ -332,7 +330,39 @@ Difficulté : Moyenne (~2 heures)
 ### **Atelier 2 : Choisir notre point de restauration**  
 Aujourd’hui nous restaurobs “le dernier backup”. Nous souhaitons **ajouter la capacité de choisir un point de restauration**.
 
-*..Décrir ici votre procédure de restauration (votre runbook)..*  
+Runbook – Procédure de restauration
+
+- Arrêter l’application et suspendre les sauvegardes afin d’éviter toute écriture pendant la restauration.
+```
+kubectl -n pra scale deployment flask --replicas=0
+kubectl -n pra patch cronjob sqlite-backup -p '{"spec":{"suspend":true}}'
+```
+
+Lister les sauvegardes disponibles stockées dans le PVC de backup.
+```
+kubectl -n pra run debug-backup --rm -it --image=alpine \
+--overrides='{"spec":{"containers":[{"name":"debug","image":"alpine","command":["sh"],"stdin":true,"tty":true,"volumeMounts":[{"name":"backup","mountPath":"/backup"}]}],"volumes":[{"name":"backup","persistentVolumeClaim":{"claimName":"pra-backup"}}]}}'
+ls -lh /backup
+```
+
+Identifier le fichier correspondant au point de restauration souhaité.
+
+Lancer le job de restauration pour recopier la sauvegarde choisie vers le PVC de production.
+```
+kubectl apply -f pra/50-job-restore.yaml
+```
+
+Redémarrer l’application et réactiver les sauvegardes automatiques.
+```
+kubectl -n pra scale deployment flask --replicas=1
+kubectl -n pra patch cronjob sqlite-backup -p '{"spec":{"suspend":false}}'
+```
+
+Vérifier la restauration via les endpoints applicatifs (/count, /consultation).
+
+Conclusion
+
+Cette procédure permet de restaurer les données à un instant précis et constitue une mise en œuvre simple et contrôlée d’un Plan de Reprise d’Activité.
   
 ---------------------------------------------------
 Evaluation
