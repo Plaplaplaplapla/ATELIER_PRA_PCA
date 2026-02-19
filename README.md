@@ -230,28 +230,86 @@ Faites preuve de pédagogie et soyez clair dans vos explications et procedures d
 
 **Exercice 1 :**  
 Quels sont les composants dont la perte entraîne une perte de données ?  
-  
-*..Répondez à cet exercice ici..*
+La perte de données intervient lorsque les composants de stockage persistant sont impactés.
+Dans notre architecture, il s’agit principalement de :
+Le PVC pra-data
+Il contient la base de données SQLite de production. Sa suppression entraîne la perte directe des données si aucune sauvegarde n’existe.
+Le PVC pra-backup
+Il stocke les sauvegardes périodiques de la base de données. Sa perte entraîne l’impossibilité de restaurer les données en cas de sinistre sur pra-data.
+Les autres composants (Pod, Deployment, Service, CronJob) n’entraînent pas de perte de données car ils sont soit :
+éphémères (Pod),
+soit déclaratifs et recréables automatiquement (Deployment, Service, CronJob).
+Conclusion :
+La perte de données est liée uniquement à la perte des volumes persistants (PVC), et non aux composants applicatifs.
 
 **Exercice 2 :**  
 Expliquez nous pourquoi nous n'avons pas perdu les données lors de la supression du PVC pra-data  
-  
-*..Répondez à cet exercice ici..*
+  Lors de la suppression du PVC pra-data, les données de production ont effectivement été perdues, mais elles ont pu être restaurées grâce à la stratégie de sauvegarde mise en place.
+
+Les raisons sont les suivantes :
+- Des sauvegardes automatiques existent
+- Un CronJob Kubernetes réalise une sauvegarde de la base SQLite toutes les minutes.
+- Ces sauvegardes sont copiées depuis le PVC pra-data vers un PVC distinct : pra-backup.
+- Le PVC de sauvegarde est indépendant
+- pra-backup n’est pas supprimé lors de la destruction de pra-data.
+- Les sauvegardes restent donc intactes après le sinistre.
+- Une procédure de restauration est disponible
+- Un Job Kubernetes (50-job-restore.yaml) permet de restaurer la base depuis pra-backup.
+- Après restauration, l’application retrouve l’intégralité de ses données.
+Conclusion :
+Les données n’ont pas été perdues définitivement grâce à une stratégie de PRA (Plan de Reprise d’Activité) basée sur des sauvegardes régulières et une procédure de restauration manuelle.
 
 **Exercice 3 :**  
 Quels sont les RTO et RPO de cette solution ?  
   
-*..Répondez à cet exercice ici..*
+RPO (Recovery Point Objective)
+
+Les sauvegardes étant effectuées toutes les minutes, le RPO est d’environ 1 mins
+
+RTO (Recovery Time Objective)
+Le RTO correspond au temps nécessaire pour restaurer le service après un sinistre.
+La restauration implique :
+recréation du PVC, lancement du Job de restauration, redémarrage de l’application. Environs 5 à 10 mins.
+
+Conclusion :
+RPO court (bonne protection des données)
+RTO court aussi 
 
 **Exercice 4 :**  
 Pourquoi cette solution (cet atelier) ne peux pas être utilisé dans un vrai environnement de production ? Que manque-t-il ?   
   
-*..Répondez à cet exercice ici..*
+- SQLite n’est pas adapté à la production
+- Un seul volume de données.
+- Pas de réplication des données sur plusieurs nœuds ou zones.
+- Restauration manuelle
+- Le PRA n’est pas automatisé.
+- Pas de chiffrement des volumes.
+- Pas de gestion des secrets via un outil dédié 
+- Pas d’observabilité
+- Absence de monitoring
+- Absence de logs centralisés.
+- Pas d’alerting en cas de panne.
   
 **Exercice 5 :**  
 Proposez une archtecture plus robuste.   
   
-*..Répondez à cet exercice ici..*
+Proposer une architecture plus robuste
+
+Pour une utilisation en environnement de production, cette solution doit être renforcée afin d’assurer la haute disponibilité, la résilience des données et une reprise rapide après incident.
+- Déploiement Kubernetes avec plusieurs réplicas
+- Service + Ingress avec TLS
+- Base de données dédiée (PostgreSQL / MySQL)
+- Réplication primaire / secondaire
+- Stockage et sauvegardes
+- Stockage distribué (Longhorn, Ceph, cloud provider)
+- Sauvegardes externalisées (S3 / Object Storage)
+- Outils dédiés (Velero, pgBackRest)
+- PCA : redondance applicative et base répliquée
+- PRA : sauvegardes hors cluster et restauration automatisée
+- Sécurité et supervision
+- Secrets Kubernetes / chiffrement des volumes
+- Monitoring (Prometheus, Grafana)
+- Logs centralisés et alerting
 
 ---------------------------------------------------
 Séquence 6 : Ateliers  
