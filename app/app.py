@@ -120,6 +120,24 @@ def count():
     conn.close()
 
     return jsonify(count=n)
+    
+@app.get("/status")
+def status():
+    init_db()
+
+    conn = get_conn()
+    cur = conn.execute("SELECT COUNT(*) FROM events")
+    n = cur.fetchone()[0]
+    conn.close()
+
+    last_file, age = get_last_backup_info()
+
+    return jsonify(
+        count=n,
+        last_backup_file=last_file,
+        backup_age_seconds=age
+    )
+
 
 # ---------- Main ----------
 if __name__ == "__main__":
